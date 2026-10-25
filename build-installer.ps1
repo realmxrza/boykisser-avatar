@@ -19,4 +19,4 @@ finally {
     Pop-Location
 }
 
-Write-Host "Built $root\release\Boykisser-Avatar-Setup-1.0.1.exe"
+Write-Host "Built $root\release\Boykisser-Avatar-Setup-1.0.0.exe"

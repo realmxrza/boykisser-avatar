@@ -29,10 +29,8 @@ const int kMenuInteractive = 1003;
 const int kMenuMute = 1004;
 const int kMenuQuit = 1005;
 
-const int kHotkeyHide = 1;
 const int kHotkeyInteractive = 3;
 const int kHotkeyMute = 4;
-const int kHotkeyQuit = 5;
 
 HINSTANCE g_instance = NULL;
 HWND g_window = NULL;
@@ -332,18 +330,14 @@ void RemoveTray()
 
 void RegisterHotKeys()
 {
-    RegisterHotKey(g_window, kHotkeyHide, MOD_CONTROL | MOD_SHIFT, 'H');
     RegisterHotKey(g_window, kHotkeyInteractive, MOD_CONTROL | MOD_SHIFT, 'B');
     RegisterHotKey(g_window, kHotkeyMute, MOD_CONTROL | MOD_SHIFT, 'M');
-    RegisterHotKey(g_window, kHotkeyQuit, MOD_CONTROL | MOD_SHIFT, 'Q');
 }
 
 void UnregisterHotKeys()
 {
-    UnregisterHotKey(g_window, kHotkeyHide);
     UnregisterHotKey(g_window, kHotkeyInteractive);
     UnregisterHotKey(g_window, kHotkeyMute);
-    UnregisterHotKey(g_window, kHotkeyQuit);
 }
 
 void UpdateFrame()
@@ -418,17 +412,11 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
     case WM_HOTKEY:
         switch (wParam)
         {
-        case kHotkeyHide:
-            SetVisible(!g_visible);
-            break;
         case kHotkeyInteractive:
             SetInteractive(!g_interactive);
             break;
         case kHotkeyMute:
             SetMuted(!g_muted);
-            break;
-        case kHotkeyQuit:
-            PostMessageW(g_window, WM_CLOSE, 0, 0);
             break;
         }
         return 0;
