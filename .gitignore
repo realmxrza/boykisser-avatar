@@ -1,0 +1,6 @@
+dist/
+release/
+build/*.res
+*.o
+*.exe
+*.log
