@@ -2,7 +2,7 @@ Unicode True
 !include "MUI2.nsh"
 
 Name "Boykisser Avatar"
-OutFile "release\Boykisser-Avatar-Setup-1.0.0.exe"
+OutFile "release\Boykisser-Avatar-Setup-1.0.1.exe"
 InstallDir "$LOCALAPPDATA\Programs\Boykisser Avatar"
 InstallDirRegKey HKCU "Software\Boykisser Avatar" "InstallDir"
 RequestExecutionLevel user
@@ -31,7 +31,7 @@ Section "Install"
     WriteUninstaller "$INSTDIR\Uninstall.exe"
     WriteRegStr HKCU "Software\Boykisser Avatar" "InstallDir" "$INSTDIR"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Boykisser Avatar" "DisplayName" "Boykisser Avatar"
-    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Boykisser Avatar" "DisplayVersion" "1.0.0"
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Boykisser Avatar" "DisplayVersion" "1.0.1"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Boykisser Avatar" "Publisher" "realmxrza"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Boykisser Avatar" "DisplayIcon" "$INSTDIR\BoykisserAvatar.exe"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Boykisser Avatar" "UninstallString" "$INSTDIR\Uninstall.exe"

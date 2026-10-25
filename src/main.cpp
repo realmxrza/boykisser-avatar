@@ -25,13 +25,11 @@ const UINT kShowMessage = WM_APP + 2;
 const UINT kTrayId = 1;
 
 const int kMenuShowHide = 1001;
-const int kMenuTopmost = 1002;
 const int kMenuInteractive = 1003;
 const int kMenuMute = 1004;
 const int kMenuQuit = 1005;
 
 const int kHotkeyHide = 1;
-const int kHotkeyTopmost = 2;
 const int kHotkeyInteractive = 3;
 const int kHotkeyMute = 4;
 const int kHotkeyQuit = 5;
@@ -54,7 +52,6 @@ HICON g_trayIcon = NULL;
 HICON g_windowIcon = NULL;
 NOTIFYICONDATAW g_trayData = {};
 bool g_visible = true;
-bool g_topmost = true;
 bool g_interactive = false;
 bool g_muted = false;
 double g_lastFrameMs = 0.0;
@@ -218,10 +215,6 @@ void SetVisible(bool visible)
     if (visible)
     {
         ShowWindow(g_window, SW_SHOWNOACTIVATE);
-        if (g_topmost)
-        {
-            SetWindowPos(g_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        }
         g_lastFrameMs = NowMilliseconds();
         SetTimer(g_window, kRenderTimer, 16, NULL);
         RenderFrame();
@@ -233,19 +226,6 @@ void SetVisible(bool visible)
     }
 
     SetTrayTip();
-}
-
-void SetTopmost(bool topmost)
-{
-    g_topmost = topmost;
-    if (g_window != NULL)
-    {
-        SetWindowPos(
-            g_window,
-            topmost ? HWND_TOPMOST : HWND_NOTOPMOST,
-            0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    }
 }
 
 void SetInteractive(bool interactive)
@@ -295,7 +275,6 @@ void ShowTrayMenu()
 
     AppendMenuW(menu, MF_STRING, kMenuShowHide, g_visible ? L"Hide avatar" : L"Show avatar");
     AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(menu, MF_STRING | (g_topmost ? MF_CHECKED : MF_UNCHECKED), kMenuTopmost, L"Always on top");
     AppendMenuW(menu, MF_STRING | (g_interactive ? MF_CHECKED : MF_UNCHECKED), kMenuInteractive, L"Move mode");
     AppendMenuW(menu, MF_STRING | (g_muted ? MF_CHECKED : MF_UNCHECKED), kMenuMute, L"Mute microphone");
     AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
@@ -354,7 +333,6 @@ void RemoveTray()
 void RegisterHotKeys()
 {
     RegisterHotKey(g_window, kHotkeyHide, MOD_CONTROL | MOD_SHIFT, 'H');
-    RegisterHotKey(g_window, kHotkeyTopmost, MOD_CONTROL | MOD_SHIFT, 'T');
     RegisterHotKey(g_window, kHotkeyInteractive, MOD_CONTROL | MOD_SHIFT, 'B');
     RegisterHotKey(g_window, kHotkeyMute, MOD_CONTROL | MOD_SHIFT, 'M');
     RegisterHotKey(g_window, kHotkeyQuit, MOD_CONTROL | MOD_SHIFT, 'Q');
@@ -363,7 +341,6 @@ void RegisterHotKeys()
 void UnregisterHotKeys()
 {
     UnregisterHotKey(g_window, kHotkeyHide);
-    UnregisterHotKey(g_window, kHotkeyTopmost);
     UnregisterHotKey(g_window, kHotkeyInteractive);
     UnregisterHotKey(g_window, kHotkeyMute);
     UnregisterHotKey(g_window, kHotkeyQuit);
@@ -444,9 +421,6 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         case kHotkeyHide:
             SetVisible(!g_visible);
             break;
-        case kHotkeyTopmost:
-            SetTopmost(!g_topmost);
-            break;
         case kHotkeyInteractive:
             SetInteractive(!g_interactive);
             break;
@@ -464,9 +438,6 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         {
         case kMenuShowHide:
             SetVisible(!g_visible);
-            break;
-        case kMenuTopmost:
-            SetTopmost(!g_topmost);
             break;
         case kMenuInteractive:
             SetInteractive(!g_interactive);
@@ -639,10 +610,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
     RegisterHotKeys();
     g_microphone.Start();
 
-    SetWindowPos(g_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     ShowWindow(g_window, SW_SHOWNOACTIVATE);
     SetVisible(true);
-    SetTopmost(true);
 
     g_showThread = std::thread([]() {
         HANDLE handles[2] = { g_showEvent, g_exitEvent };
