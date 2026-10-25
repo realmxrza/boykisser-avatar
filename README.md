@@ -14,6 +14,10 @@ A transparent, microphone-driven desktop avatar for Windows.
 - `Ctrl+Shift+M` — mute or unmute the microphone
 - `Ctrl+Shift+B` — move mode
 
+## Uninstall
+
+Open **Settings → Apps → Installed apps → Boykisser Avatar → Uninstall**, or run `Uninstall.exe` from the install folder.
+
 ## Credits
 
 Artwork by [Technoturge](https://ko-fi.com/technoturge/).
