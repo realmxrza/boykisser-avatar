@@ -1,6 +1,4 @@
-# Boykisser Avatar
-
-A transparent, microphone-driven desktop avatar for Windows.
+<img width="872" height="490" alt="image" src="https://github.com/user-attachments/assets/504df9a9-7baa-4adc-9cd6-cbcfb03c226b" />
 
 ## Download
 
@@ -11,8 +9,8 @@ A transparent, microphone-driven desktop avatar for Windows.
 
 ## Controls
 
-- `Ctrl+Shift+M` — mute or unmute the microphone
-- `Ctrl+Shift+B` — move mode
+- `Ctrl+Shift+M` — mute/unmute the microphone
+- `Ctrl+Shift+B` — drag boykisser
 
 ## Uninstall
 
