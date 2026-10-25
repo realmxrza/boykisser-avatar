@@ -6,6 +6,7 @@
 #include <objbase.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <string>
@@ -36,8 +37,10 @@ const int kHotkeyMute = 4;
 HINSTANCE g_instance = NULL;
 HWND g_window = NULL;
 Avatar* g_avatar = NULL;
-Microphone g_microphone;
+Microphone* g_microphone = new Microphone();
 ULONG_PTR g_gdiplusToken = 0;
+std::atomic<bool> g_micExit(false);
+std::atomic<bool> g_micFinished(false);
 
 HDC g_memoryDc = NULL;
 HBITMAP g_bitmap = NULL;
@@ -50,7 +53,6 @@ int g_height = 780;
 HICON g_trayIcon = NULL;
 HICON g_windowIcon = NULL;
 NOTIFYICONDATAW g_trayData = {};
-std::wstring g_micDeviceId;
 bool g_visible = true;
 bool g_interactive = false;
 bool g_muted = false;
@@ -262,7 +264,7 @@ void SetInteractive(bool interactive)
 void SetMuted(bool muted)
 {
     g_muted = muted;
-    g_microphone.SetMuted(muted);
+    g_microphone->SetMuted(muted);
 }
 
 void ShowTrayMenu()
@@ -342,26 +344,38 @@ void UnregisterHotKeys()
     UnregisterHotKey(g_window, kHotkeyMute);
 }
 
-void PollMicrophone()
+void MicrophoneThread()
 {
-    static ULONGLONG lastCheck = 0;
-    const ULONGLONG now = GetTickCount64();
-    if (now - lastCheck < 1500)
-    {
-        return;
-    }
-    lastCheck = now;
+    CoInitializeEx(NULL, COINIT_MULTITHREADED);
 
-    const std::wstring deviceId = Microphone::DefaultDeviceId();
-    const bool deviceChanged = deviceId != g_micDeviceId;
-    const bool stalled = g_microphone.IsRunning() && g_microphone.Stalled(now, 1500);
+    g_microphone->Start();
+    std::wstring deviceId = Microphone::DefaultDeviceId();
+    ULONGLONG lastCheck = GetTickCount64();
 
-    if (!g_microphone.IsRunning() || deviceChanged || stalled)
+    while (!g_micExit.load())
     {
-        g_microphone.Stop();
-        g_microphone.Start();
-        g_micDeviceId = Microphone::DefaultDeviceId();
+        Sleep(100);
+        const ULONGLONG now = GetTickCount64();
+        if (now - lastCheck < 1500)
+        {
+            continue;
+        }
+        lastCheck = now;
+
+        const std::wstring current = Microphone::DefaultDeviceId();
+        const bool stalled = g_microphone->IsRunning() && g_microphone->Stalled(now, 1500);
+
+        if (!g_microphone->IsRunning() || current != deviceId || stalled)
+        {
+            g_microphone->Stop();
+            g_microphone->Start();
+            deviceId = Microphone::DefaultDeviceId();
+        }
     }
+
+    g_microphone->Stop();
+    CoUninitialize();
+    g_micFinished.store(true);
 }
 
 void UpdateFrame()
@@ -370,8 +384,6 @@ void UpdateFrame()
     {
         return;
     }
-
-    PollMicrophone();
 
     const double now = NowMilliseconds();
     double delta = (now - g_lastFrameMs) / 1000.0;
@@ -386,7 +398,7 @@ void UpdateFrame()
         delta = 0.04;
     }
 
-    g_avatar->Update(g_microphone.Level(), g_muted, now, delta);
+    g_avatar->Update(g_microphone->Level(), g_muted, now, delta);
     RenderFrame();
 }
 
@@ -395,7 +407,12 @@ void Cleanup()
     KillTimer(g_window, kRenderTimer);
     UnregisterHotKeys();
     RemoveTray();
-    g_microphone.Stop();
+
+    g_micExit.store(true);
+    for (int i = 0; i < 10 && !g_micFinished.load(); ++i)
+    {
+        Sleep(50);
+    }
 
     delete g_avatar;
     g_avatar = NULL;
@@ -557,8 +574,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
 
     g_exitEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
 
-    const bool comInitialized = SUCCEEDED(CoInitializeEx(NULL, COINIT_MULTITHREADED));
-
     g_instance = instance;
 
     WNDCLASSEXW windowClass = {};
@@ -598,10 +613,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
 
     if (g_window == NULL)
     {
-        if (comInitialized)
-        {
-            CoUninitialize();
-        }
         GdiplusShutdown(g_gdiplusToken);
         timeEndPeriod(1);
         return 1;
@@ -618,10 +629,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
     if (!CreateSurface(g_width, g_height))
     {
         DestroyWindow(g_window);
-        if (comInitialized)
-        {
-            CoUninitialize();
-        }
         GdiplusShutdown(g_gdiplusToken);
         timeEndPeriod(1);
         return 1;
@@ -632,8 +639,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
 
     CreateTray();
     RegisterHotKeys();
-    g_microphone.Start();
-    g_micDeviceId = Microphone::DefaultDeviceId();
+    std::thread(MicrophoneThread).detach();
 
     ShowWindow(g_window, SW_SHOWNOACTIVATE);
     SetVisible(true);
@@ -666,9 +672,5 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
 
     timeEndPeriod(1);
     GdiplusShutdown(g_gdiplusToken);
-    if (comInitialized)
-    {
-        CoUninitialize();
-    }
     return static_cast<int>(message.wParam);
 }
