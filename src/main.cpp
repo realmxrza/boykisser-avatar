@@ -3,6 +3,7 @@
 #include <shellapi.h>
 #include <gdiplus.h>
 #include <mmsystem.h>
+#include <objbase.h>
 
 #include <algorithm>
 #include <chrono>
@@ -49,6 +50,7 @@ int g_height = 780;
 HICON g_trayIcon = NULL;
 HICON g_windowIcon = NULL;
 NOTIFYICONDATAW g_trayData = {};
+std::wstring g_micDeviceId;
 bool g_visible = true;
 bool g_interactive = false;
 bool g_muted = false;
@@ -340,12 +342,36 @@ void UnregisterHotKeys()
     UnregisterHotKey(g_window, kHotkeyMute);
 }
 
+void PollMicrophone()
+{
+    static ULONGLONG lastCheck = 0;
+    const ULONGLONG now = GetTickCount64();
+    if (now - lastCheck < 1500)
+    {
+        return;
+    }
+    lastCheck = now;
+
+    const std::wstring deviceId = Microphone::DefaultDeviceId();
+    const bool deviceChanged = deviceId != g_micDeviceId;
+    const bool stalled = g_microphone.IsRunning() && g_microphone.Stalled(now, 1500);
+
+    if (!g_microphone.IsRunning() || deviceChanged || stalled)
+    {
+        g_microphone.Stop();
+        g_microphone.Start();
+        g_micDeviceId = Microphone::DefaultDeviceId();
+    }
+}
+
 void UpdateFrame()
 {
     if (g_avatar == NULL)
     {
         return;
     }
+
+    PollMicrophone();
 
     const double now = NowMilliseconds();
     double delta = (now - g_lastFrameMs) / 1000.0;
@@ -531,6 +557,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
 
     g_exitEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
 
+    const bool comInitialized = SUCCEEDED(CoInitializeEx(NULL, COINIT_MULTITHREADED));
+
     g_instance = instance;
 
     WNDCLASSEXW windowClass = {};
@@ -570,6 +598,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
 
     if (g_window == NULL)
     {
+        if (comInitialized)
+        {
+            CoUninitialize();
+        }
         GdiplusShutdown(g_gdiplusToken);
         timeEndPeriod(1);
         return 1;
@@ -586,6 +618,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
     if (!CreateSurface(g_width, g_height))
     {
         DestroyWindow(g_window);
+        if (comInitialized)
+        {
+            CoUninitialize();
+        }
         GdiplusShutdown(g_gdiplusToken);
         timeEndPeriod(1);
         return 1;
@@ -597,6 +633,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
     CreateTray();
     RegisterHotKeys();
     g_microphone.Start();
+    g_micDeviceId = Microphone::DefaultDeviceId();
 
     ShowWindow(g_window, SW_SHOWNOACTIVATE);
     SetVisible(true);
@@ -629,5 +666,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
 
     timeEndPeriod(1);
     GdiplusShutdown(g_gdiplusToken);
+    if (comInitialized)
+    {
+        CoUninitialize();
+    }
     return static_cast<int>(message.wParam);
 }

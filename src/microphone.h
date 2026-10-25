@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <mmsystem.h>
 #include <atomic>
+#include <string>
 
 class Microphone
 {
@@ -14,6 +15,9 @@ public:
     void Stop();
     void SetMuted(bool muted);
     float Level() const;
+    bool IsRunning() const;
+    bool Stalled(ULONGLONG now, ULONGLONG timeout) const;
+    static std::wstring DefaultDeviceId();
 
 private:
     static void CALLBACK WaveProc(HWAVEIN handle, UINT message, DWORD_PTR instance, DWORD_PTR param1, DWORD_PTR param2);
@@ -28,4 +32,5 @@ private:
     std::atomic<float> level_;
     std::atomic<bool> muted_;
     std::atomic<bool> running_;
+    std::atomic<ULONGLONG> lastData_;
 };

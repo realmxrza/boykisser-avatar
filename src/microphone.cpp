@@ -1,12 +1,22 @@
 #include "microphone.h"
 
+#include <mmdeviceapi.h>
+#include <objbase.h>
+
 #include <cmath>
+
+namespace
+{
+const CLSID kMMDeviceEnumeratorClass = {0xBCDE0395, 0xE52F, 0x467C, {0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E}};
+const IID kMMDeviceEnumeratorInterface = {0xA95664D2, 0x9614, 0x4F35, {0xA7, 0x46, 0xDE, 0x8D, 0xB6, 0x36, 0x17, 0xE6}};
+}
 
 Microphone::Microphone()
     : handle_(NULL)
     , level_(0.0f)
     , muted_(false)
     , running_(false)
+    , lastData_(0)
 {
     ZeroMemory(headers_, sizeof(headers_));
     ZeroMemory(buffers_, sizeof(buffers_));
@@ -60,6 +70,7 @@ bool Microphone::Start()
     }
 
     waveInStart(handle_);
+    lastData_.store(GetTickCount64());
     return true;
 }
 
@@ -87,6 +98,7 @@ void Microphone::Stop()
     waveInClose(handle_);
     handle_ = NULL;
     level_.store(0.0f);
+    lastData_.store(0);
 }
 
 void Microphone::SetMuted(bool muted)
@@ -97,6 +109,52 @@ void Microphone::SetMuted(bool muted)
 float Microphone::Level() const
 {
     return muted_.load() ? 0.0f : level_.load();
+}
+
+bool Microphone::IsRunning() const
+{
+    return running_.load();
+}
+
+bool Microphone::Stalled(ULONGLONG now, ULONGLONG timeout) const
+{
+    const ULONGLONG last = lastData_.load();
+    return last != 0 && now > last && now - last > timeout;
+}
+
+std::wstring Microphone::DefaultDeviceId()
+{
+    std::wstring id;
+    IMMDeviceEnumerator* enumerator = NULL;
+    if (SUCCEEDED(CoCreateInstance(
+            kMMDeviceEnumeratorClass,
+            NULL,
+            CLSCTX_ALL,
+            kMMDeviceEnumeratorInterface,
+            reinterpret_cast<void**>(&enumerator))) &&
+        enumerator != NULL)
+    {
+        auto appendRole = [&](ERole role) {
+            IMMDevice* device = NULL;
+            if (SUCCEEDED(enumerator->GetDefaultAudioEndpoint(eCapture, role, &device)) && device != NULL)
+            {
+                LPWSTR value = NULL;
+                if (SUCCEEDED(device->GetId(&value)) && value != NULL)
+                {
+                    id.append(value);
+                    CoTaskMemFree(value);
+                }
+                device->Release();
+            }
+            id.push_back(L'|');
+        };
+
+        appendRole(eConsole);
+        appendRole(eCommunications);
+        enumerator->Release();
+    }
+
+    return id;
 }
 
 void CALLBACK Microphone::WaveProc(HWAVEIN handle, UINT message, DWORD_PTR instance, DWORD_PTR param1, DWORD_PTR param2)
@@ -122,6 +180,8 @@ void Microphone::OnData(WAVEHDR* header)
     {
         return;
     }
+
+    lastData_.store(GetTickCount64());
 
     const DWORD bytes = header->dwBytesRecorded;
     if (bytes >= sizeof(short))
