@@ -37,10 +37,11 @@ const int kHotkeyMute = 4;
 HINSTANCE g_instance = NULL;
 HWND g_window = NULL;
 Avatar* g_avatar = NULL;
-Microphone* g_microphone = new Microphone();
+std::atomic<Microphone*> g_microphone(new Microphone());
 ULONG_PTR g_gdiplusToken = 0;
 std::atomic<bool> g_micExit(false);
 std::atomic<bool> g_micFinished(false);
+std::atomic<bool> g_micMuted(false);
 
 HDC g_memoryDc = NULL;
 HBITMAP g_bitmap = NULL;
@@ -264,7 +265,12 @@ void SetInteractive(bool interactive)
 void SetMuted(bool muted)
 {
     g_muted = muted;
-    g_microphone->SetMuted(muted);
+    g_micMuted.store(muted);
+    Microphone* microphone = g_microphone.load();
+    if (microphone != NULL)
+    {
+        microphone->SetMuted(muted);
+    }
 }
 
 void ShowTrayMenu()
@@ -348,8 +354,29 @@ void MicrophoneThread()
 {
     CoInitializeEx(NULL, COINIT_MULTITHREADED);
 
-    g_microphone->Start();
-    std::wstring deviceId = Microphone::DefaultDeviceId();
+    Microphone* current = NULL;
+    std::wstring deviceId;
+
+    auto replace = [&]() {
+        Microphone* next = new Microphone();
+        next->SetMuted(g_micMuted.load());
+        if (!next->Start())
+        {
+            delete next;
+            return;
+        }
+
+        Microphone* old = g_microphone.exchange(next);
+        current = next;
+        deviceId = Microphone::DefaultDeviceId();
+
+        if (old != NULL)
+        {
+            std::thread([old]() { old->Stop(); }).detach();
+        }
+    };
+
+    replace();
     ULONGLONG lastCheck = GetTickCount64();
 
     while (!g_micExit.load())
@@ -362,18 +389,26 @@ void MicrophoneThread()
         }
         lastCheck = now;
 
-        const std::wstring current = Microphone::DefaultDeviceId();
-        const bool stalled = g_microphone->IsRunning() && g_microphone->Stalled(now, 1500);
-
-        if (!g_microphone->IsRunning() || current != deviceId || stalled)
+        if (current == NULL || !current->IsRunning())
         {
-            g_microphone->Stop();
-            g_microphone->Start();
-            deviceId = Microphone::DefaultDeviceId();
+            replace();
+        }
+
+        const std::wstring currentId = Microphone::DefaultDeviceId();
+        const bool stalled = current != NULL && current->IsRunning() && current->Stalled(now, 1500);
+
+        if (currentId != deviceId || stalled)
+        {
+            replace();
         }
     }
 
-    g_microphone->Stop();
+    Microphone* final = g_microphone.exchange(NULL);
+    if (final != NULL)
+    {
+        std::thread([final]() { final->Stop(); }).detach();
+    }
+
     CoUninitialize();
     g_micFinished.store(true);
 }
@@ -398,7 +433,10 @@ void UpdateFrame()
         delta = 0.04;
     }
 
-    g_avatar->Update(g_microphone->Level(), g_muted, now, delta);
+    Microphone* microphone = g_microphone.load();
+    const float level = microphone != NULL ? microphone->Level() : 0.0f;
+
+    g_avatar->Update(level, g_muted, now, delta);
     RenderFrame();
 }
 
