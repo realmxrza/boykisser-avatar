@@ -12,13 +12,14 @@ public:
     Microphone();
     ~Microphone();
 
-    bool Start();
+    bool Start(UINT_PTR deviceId = WAVE_MAPPER);
     void Stop();
     void SetMuted(bool muted);
     float Level() const;
     bool IsRunning() const;
     bool Stalled(ULONGLONG now, ULONGLONG timeout) const;
     static std::wstring DefaultDeviceId();
+    static UINT_PTR DefaultWaveInDeviceId();
 
 private:
     static void CALLBACK WaveProc(HWAVEIN handle, UINT message, DWORD_PTR instance, DWORD_PTR param1, DWORD_PTR param2);

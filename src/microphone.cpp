@@ -2,6 +2,7 @@
 
 #include <mmdeviceapi.h>
 #include <objbase.h>
+#include <propsys.h>
 
 #include <cmath>
 
@@ -27,7 +28,7 @@ Microphone::~Microphone()
     Stop();
 }
 
-bool Microphone::Start()
+bool Microphone::Start(UINT_PTR deviceId)
 {
     if (handle_ != NULL)
     {
@@ -44,7 +45,7 @@ bool Microphone::Start()
 
     MMRESULT result = waveInOpen(
         &handle_,
-        WAVE_MAPPER,
+        deviceId,
         &format,
         reinterpret_cast<DWORD_PTR>(&Microphone::WaveProc),
         reinterpret_cast<DWORD_PTR>(this),
@@ -159,6 +160,70 @@ std::wstring Microphone::DefaultDeviceId()
     }
 
     return id;
+}
+
+UINT_PTR Microphone::DefaultWaveInDeviceId()
+{
+    std::wstring friendlyName;
+    IMMDeviceEnumerator* enumerator = NULL;
+    if (SUCCEEDED(CoCreateInstance(
+            kMMDeviceEnumeratorClass,
+            NULL,
+            CLSCTX_ALL,
+            kMMDeviceEnumeratorInterface,
+            reinterpret_cast<void**>(&enumerator))) &&
+        enumerator != NULL)
+    {
+        IMMDevice* device = NULL;
+        if (SUCCEEDED(enumerator->GetDefaultAudioEndpoint(eCapture, eConsole, &device)) && device != NULL)
+        {
+            IPropertyStore* store = NULL;
+            if (SUCCEEDED(device->OpenPropertyStore(STGM_READ, &store)) && store != NULL)
+            {
+                const PROPERTYKEY key = {{0xA45C254E, 0xDF1C, 0x4EFD, {0x80, 0x20, 0x67, 0xD1, 0x46, 0xA8, 0x50, 0xE0}}, 14};
+                PROPVARIANT value = {};
+                if (SUCCEEDED(store->GetValue(key, &value)))
+                {
+                    if (value.vt == VT_LPWSTR && value.pwszVal != NULL)
+                    {
+                        friendlyName = value.pwszVal;
+                        CoTaskMemFree(value.pwszVal);
+                    }
+                }
+                store->Release();
+            }
+            device->Release();
+        }
+        enumerator->Release();
+    }
+
+    if (friendlyName.empty())
+    {
+        return WAVE_MAPPER;
+    }
+
+    const UINT count = waveInGetNumDevs();
+    for (UINT i = 0; i < count; ++i)
+    {
+        WAVEINCAPSW caps = {};
+        if (waveInGetDevCapsW(i, &caps, sizeof(caps)) != MMSYSERR_NOERROR)
+        {
+            continue;
+        }
+
+        const std::wstring name = caps.szPname;
+        const bool matches =
+            friendlyName == name ||
+            (friendlyName.size() >= name.size() && friendlyName.compare(0, name.size(), name) == 0) ||
+            (name.size() >= friendlyName.size() && name.compare(0, friendlyName.size(), friendlyName) == 0);
+
+        if (matches)
+        {
+            return i;
+        }
+    }
+
+    return WAVE_MAPPER;
 }
 
 void CALLBACK Microphone::WaveProc(HWAVEIN handle, UINT message, DWORD_PTR instance, DWORD_PTR param1, DWORD_PTR param2)

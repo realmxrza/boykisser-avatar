@@ -360,7 +360,7 @@ void MicrophoneThread()
     auto replace = [&]() {
         Microphone* next = new Microphone();
         next->SetMuted(g_micMuted.load());
-        if (!next->Start())
+        if (!next->Start(Microphone::DefaultWaveInDeviceId()))
         {
             delete next;
             return;
