@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <mmsystem.h>
 #include <atomic>
+#include <mutex>
 #include <string>
 
 class Microphone
@@ -33,4 +34,5 @@ private:
     std::atomic<bool> muted_;
     std::atomic<bool> running_;
     std::atomic<ULONGLONG> lastData_;
+    std::mutex mutex_;
 };

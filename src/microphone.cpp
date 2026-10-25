@@ -82,6 +82,10 @@ void Microphone::Stop()
     }
 
     running_.store(false);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+    }
+
     waveInStop(handle_);
     waveInReset(handle_);
 
@@ -177,6 +181,12 @@ void CALLBACK Microphone::WaveProc(HWAVEIN handle, UINT message, DWORD_PTR insta
 void Microphone::OnData(WAVEHDR* header)
 {
     if (!running_.load() || header == NULL)
+    {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!running_.load())
     {
         return;
     }
